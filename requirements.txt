@@ -1,3 +1,5 @@
 cffi==1.15.1
+gunicorn==23.0.0
+packaging==24.2
 pycparser==2.21
 six==1.16.0
