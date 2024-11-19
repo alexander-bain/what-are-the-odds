@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <title>Sports Odds</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        h1 {
+            text-align: center;
+        }
+        form {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        table, th, td {
+            border: 1px solid black;
+        }
+        th, td {
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+    <h1>Sports Odds</h1>
+    <form method="POST">
+        <label for="team_name">Enter Team Name:</label>
+        <input type="text" id="team_name" name="team_name" required>
+        <br><br>
+    
+        <label for="bookmaker">Filter by Bookmaker:</label>
+        <select id="bookmaker" name="bookmaker">
+            <option value="">Any</option>
+            <option value="DraftKings">DraftKings</option>
+            <option value="FanDuel">FanDuel</option>
+            <option value="Caesars">Caesars</option>
+            <option value="BetMGM">BetMGM</option>
+            <option value="Bovada">Bovada</option>
+        </select>
+        <br><br>
+    
+        <button type="submit">Search</button>
+    </form>
+    {% if team_name %}
+        <h2>Results for "{{ team_name }}"</h2>
+        {% if odds %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Game</th>
+                    <th>Commence Time</th>
+                    <th>Bookmaker</th>
+                    <th>Outcome</th>
+                    <th>Win Probability (%)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in odds %}
+                    <tr>
+                        <td>{{ item.Game }}</td>
+                        <td>{{ item.CommenceTime }}</td>
+                        <td>{{ item.Bookmaker }}</td>
+                        <td>{{ item.Outcome }}</td>
+                        <td>{{ item.WinProbability }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+            <p>No games found for "{{ team_name }}".</p>
+        {% endif %}
+    {% endif %}
+</body>
+</html>
