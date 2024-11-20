@@ -1,4 +1,1 @@
-blinker==1.9.0
-certifi==2024.8.30
-...
-Werkzeug==3.1.3
+
