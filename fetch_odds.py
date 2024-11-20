@@ -1,105 +1,117 @@
 import requests
-import csv
 from datetime import datetime
+from pytz import timezone
 
-API_KEY = '7d876eee43b66d431401bf58f1b3a8b0'
-BASE_URL = 'https://api.the-odds-api.com/v4/sports'
+API_KEY = "396119decf15c527df766e99d5b8dce4"
+BASE_URL = "https://api.the-odds-api.com/v4/sports"
+EXCLUDED_GROUPS = ["Soccer", "Rugby League", "Rugby Union", "Cricket", "Boxing", "Aussie Rules", "Ice Hockey"]
+INCLUDED_SPORTS = {
+    "americanfootball_nfl": "NFL",
+    "americanfootball_ncaaf": "NCAAF",
+    "basketball_nba": "NBA",
+    "basketball_ncaab": "NCAAB",
+}
 
-def fetch_and_filter_odds():
-    # Prompt user for a team name
-    while True:
-        team_name = input("Enter a team name to filter by: ").strip()
-        if not team_name:
-            print("Error: Team name cannot be empty. Please try again.")
-        elif not team_name.isalpha():
-            print("Error: Team name should only contain letters. Please try again.")
-        else:
-            break
+def fetch_all_games_by_group():
+    pacific_tz = timezone("US/Pacific")
+    now = datetime.now(pacific_tz)
 
-    team_name = team_name.lower()  # Convert to lowercase for comparison
+    games_by_group = {}
 
-    sport = 'basketball_nba'  # Replace with your chosen sport
-    region = 'us'  # Adjust region if needed
-    url = f"{BASE_URL}/{sport}/odds/?apiKey={API_KEY}&regions={region}"
+    # Explicitly fetch key sports
+    for sport_key, group_name in INCLUDED_SPORTS.items():
+        fetch_games_for_sport(sport_key, group_name, games_by_group, pacific_tz, now)
 
+    # Dynamically fetch remaining sports
     try:
+        url = f"{BASE_URL}/?apiKey={API_KEY}"
         response = requests.get(url)
-        response.raise_for_status()  # Raise an error for HTTP status codes 4xx/5xx
+        response.raise_for_status()
+        sports_data = response.json()
 
-        odds_data = response.json()
-        print(f"\nFiltering games for team: {team_name.capitalize()}\n")
+        for sport in sports_data:
+            sport_key = sport["key"]
+            group = sport.get("group", "Other")
 
-        found_games = False
-        results = []
-        for game in odds_data:
-            home_team = game['home_team']
-            away_team = game['away_team']
+            # Skip excluded groups or included sports
+            if group in EXCLUDED_GROUPS or sport_key in INCLUDED_SPORTS:
+                continue
 
-            # Check if the team is in this game
-            if team_name in home_team.lower() or team_name in away_team.lower():
-                found_games = True
-                commence_time = format_datetime(game['commence_time'])
-                print(f"\nGame: {home_team} vs {away_team}")
-                print(f"Commence Time: {commence_time}")
-
-                for bookmaker in game['bookmakers']:
-                    print(f"  Bookmaker: {bookmaker['title']}")
-                    for market in bookmaker['markets']:
-                        if market['key'] == 'h2h':  # Head-to-head market
-                            for outcome in market['outcomes']:
-                                print(f"    {outcome['name']}: {outcome['price']}")
-
-                                # Save result to the list
-                                results.append({
-                                    'Game': f"{home_team} vs {away_team}",
-                                    'Commence Time': commence_time,
-                                    'Bookmaker': bookmaker['title'],
-                                    'Outcome': outcome['name'],
-                                    'Odds': outcome['price']
-                                })
-
-        if not found_games:
-            print(f"No games found for team: {team_name.capitalize()}")
-        else:
-            # Save results to a CSV file
-            save_to_csv(team_name, results)
+            fetch_games_for_sport(sport_key, group, games_by_group, pacific_tz, now)
 
     except requests.exceptions.RequestException as e:
-        print(f"Error fetching data: {e}")
-    except KeyError as e:
-        print(f"Error parsing response: Missing key {e}")
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+        print(f"DEBUG: Error fetching sports data: {e}")
+
+    if not games_by_group:
+        print("DEBUG: No games found in any category.")
+
+    return games_by_group
 
 
-def format_datetime(iso_string):
-    """Convert ISO 8601 datetime string to human-readable format."""
+def fetch_games_for_sport(sport_key, group_name, games_by_group, pacific_tz, now):
+    url = f"{BASE_URL}/{sport_key}/odds/?apiKey={API_KEY}&regions=us&markets=h2h"
     try:
-        dt = datetime.fromisoformat(iso_string.replace('Z', '+00:00'))  # Handle timezone-aware ISO strings
-        return dt.strftime("%Y-%m-%d %I:%M %p")  # Format: YYYY-MM-DD HH:MM AM/PM
-    except Exception as e:
-        print(f"Error formatting datetime: {e}")
-        return iso_string  # Return original if formatting fails
+        response = requests.get(url)
+        response.raise_for_status()
+        odds_data = response.json()
 
+        if not odds_data:
+            return
 
-def save_to_csv(team_name, results):
-    # Generate a timestamped filename
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"{team_name}_odds_{timestamp}.csv"
+        games = []
+        for game in odds_data:
+            try:
+                home_team = game["home_team"]
+                away_team = game["away_team"]
+                commence_time = game["commence_time"]
+                bookmakers = game.get("bookmakers", [])
+            except KeyError as e:
+                print(f"DEBUG: Missing key in game data: {e}")
+                continue
 
-    # Define CSV column headers
-    fieldnames = ['Game', 'Commence Time', 'Bookmaker', 'Outcome', 'Odds']
+            home_probs, away_probs = [], []
+            for bookmaker in bookmakers:
+                for market in bookmaker.get("markets", []):
+                    if market["key"] == "h2h":
+                        outcomes = market["outcomes"]
+                        home_odds = next((o["price"] for o in outcomes if o["name"] == home_team), None)
+                        away_odds = next((o["price"] for o in outcomes if o["name"] == away_team), None)
 
-    try:
-        with open(filename, mode='w', newline='', encoding='utf-8') as file:
-            writer = csv.DictWriter(file, fieldnames=fieldnames)
-            writer.writeheader()
-            writer.writerows(results)
-        
-        print(f"\nData successfully saved to {filename}")
-    except Exception as e:
-        print(f"Error saving to CSV: {e}")
+                        if home_odds and away_odds:
+                            home_prob = 1 / home_odds
+                            away_prob = 1 / away_odds
+                            total_prob = home_prob + away_prob
+                            home_probs.append((home_prob / total_prob) * 100)
+                            away_probs.append((away_prob / total_prob) * 100)
 
+            avg_home_prob = round(sum(home_probs) / len(home_probs)) if home_probs else "N/A"
+            avg_away_prob = round(sum(away_probs) / len(away_probs)) if away_probs else "N/A"
 
-if __name__ == "__main__":
-    fetch_and_filter_odds()
+            commence_time_utc = datetime.fromisoformat(commence_time.replace('Z', '+00:00'))
+            commence_time_pacific = commence_time_utc.astimezone(pacific_tz).strftime("%Y-%m-%d %I:%M %p")
+
+            games.append({
+                "Sport": group_name,
+                "Game": f"{home_team} vs {away_team}",
+                "CommenceTime": commence_time_pacific,
+                "HomeWinProb": avg_home_prob,
+                "AwayWinProb": avg_away_prob,
+            })
+
+        if games:
+            if group_name not in games_by_group:
+                games_by_group[group_name] = {"today": [], "upcoming": []}
+            for game in games:
+                commence_time = datetime.strptime(game["CommenceTime"], "%Y-%m-%d %I:%M %p").replace(tzinfo=pacific_tz)
+                if commence_time.date() == now.date():
+                    games_by_group[group_name]["today"].append(game)
+                elif commence_time > now:
+                    games_by_group[group_name]["upcoming"].append(game)
+
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 422:
+            print(f"DEBUG: Unsupported market for sport: {sport_key}")
+        else:
+            print(f"DEBUG: HTTP error fetching odds for {sport_key}: {e}")
+    except requests.exceptions.RequestException as e:
+        print(f"DEBUG: Error fetching odds for {sport_key}: {e}")

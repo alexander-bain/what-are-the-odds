@@ -3,85 +3,84 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
     <title>Sports Odds</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-        }
-        h1 {
-            text-align: center;
-        }
-        form {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-        }
-        table, th, td {
-            border: 1px solid black;
-        }
-        th, td {
-            padding: 8px;
-            text-align: left;
-        }
-        th {
-            background-color: #f2f2f2;
-        }
-    </style>
 </head>
 <body>
-    <h1>Sports Odds</h1>
-    <form method="POST">
-        <label for="team_name">Enter Team Name:</label>
-        <input type="text" id="team_name" name="team_name" required>
-        <br><br>
-    
-        <label for="bookmaker">Filter by Bookmaker:</label>
-        <select id="bookmaker" name="bookmaker">
-            <option value="">Any</option>
-            <option value="DraftKings">DraftKings</option>
-            <option value="FanDuel">FanDuel</option>
-            <option value="Caesars">Caesars</option>
-            <option value="BetMGM">BetMGM</option>
-            <option value="Bovada">Bovada</option>
-        </select>
-        <br><br>
-    
-        <button type="submit">Search</button>
-    </form>
-    {% if team_name %}
-        <h2>Results for "{{ team_name }}"</h2>
-        {% if odds %}
-        <table>
-            <thead>
-                <tr>
-                    <th>Game</th>
-                    <th>Commence Time</th>
-                    <th>Bookmaker</th>
-                    <th>Outcome</th>
-                    <th>Win Probability (%)</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in odds %}
-                    <tr>
-                        <td>{{ item.Game }}</td>
-                        <td>{{ item.CommenceTime }}</td>
-                        <td>{{ item.Bookmaker }}</td>
-                        <td>{{ item.Outcome }}</td>
-                        <td>{{ item.WinProbability }}</td>
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    <div class="container my-4">
+        <h1 class="text-center">Sports Odds</h1>
+
+        {% if sorted_games %}
+            {% for group, games in sorted_games.items() %}
+                <div class="mb-5">
+                    <h2>{{ group }}</h2>
+
+                    <h3>Today's Games</h3>
+                    {% if games.today %}
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Sport</th>
+                                    <th>Game</th>
+                                    <th>Commence Time (Pacific)</th>
+                                    <th>Home Win Probability (%)</th>
+                                    <th>Away Win Probability (%)</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for game in games.today %}
+                                    <tr>
+                                        <td>{{ game.Sport }}</td>
+                                        <td>{{ game.Game }}</td>
+                                        <td>{{ game.CommenceTime }}</td>
+                                        <td>{{ game.HomeWinProb }}</td>
+                                        <td>{{ game.AwayWinProb }}</td>
+                                        <td>
+                                            <a href="/watching?sport={{ game.Sport }}&home={{ game.Game.split(' vs ')[0] }}&away={{ game.Game.split(' vs ')[1] }}" class="btn btn-primary">
+                                                Watching 📺
+                                            </a>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    {% else %}
+                        <p>No games scheduled for today.</p>
+                    {% endif %}
+
+                    <h3>Upcoming Games</h3>
+                    {% if games.upcoming %}
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Sport</th>
+                                    <th>Game</th>
+                                    <th>Commence Time (Pacific)</th>
+                                    <th>Home Win Probability (%)</th>
+                                    <th>Away Win Probability (%)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for game in games.upcoming %}
+                                    <tr>
+                                        <td>{{ game.Sport }}</td>
+                                        <td>{{ game.Game }}</td>
+                                        <td>{{ game.CommenceTime }}</td>
+                                        <td>{{ game.HomeWinProb }}</td>
+                                        <td>{{ game.AwayWinProb }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    {% else %}
+                        <p>No upcoming games.</p>
+                    {% endif %}
+                </div>
+            {% endfor %}
         {% else %}
-            <p>No games found for "{{ team_name }}".</p>
+            <p>No games available.</p>
         {% endif %}
-    {% endif %}
+    </div>
 </body>
 </html>
