@@ -1,64 +1,82 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, jsonify, render_template, request
 from fetch_odds import fetch_all_games_by_group
 
 app = Flask(__name__)
 
 @app.route('/')
 def index():
-    # Fetch sorted games from fetch_odds
-    sorted_games = fetch_all_games_by_group()
-
-    # Temporarily print sorted games for debugging
-    print(f"DEBUG: Sorted Games: {sorted_games}")
-
-    # Render the template with sorted games
-    return render_template('index.html', sorted_games=sorted_games)
+    """Renders the main page with game data."""
+    try:
+        games = fetch_all_games_by_group()
+        return render_template('index.html', sorted_games=games)
+    except Exception as e:
+        return f"An error occurred: {e}", 500
 
 @app.route('/watching')
 def watching():
-    sport = request.args.get("sport")
-    home_team = request.args.get("home")
-    away_team = request.args.get("away")
-
-    # Fetch the latest probabilities for this game
-    games_by_group = fetch_all_games_by_group()
-    game_data = None
-    for group, games in games_by_group.items():
-        for game in games["upcoming"] + games["today"]:
-            if game["Game"] == f"{home_team} vs {away_team}":
-                game_data = game
-                break
-        if game_data:
-            break
-
-    if not game_data:
-        return render_template("error.html", message="Game not found"), 404
-
-    return render_template("watching.html", game=game_data)
+    """Renders the watching page for a specific game."""
+    try:
+        sport = request.args.get('sport')
+        home = request.args.get('home')
+        away = request.args.get('away')
+        
+        games = fetch_all_games_by_group()
+        
+        # Find the specific game
+        for group, group_games in games.items():
+            for section in ['today', 'upcoming']:
+                for game in group_games[section]:
+                    if (game['Sport'] == sport and 
+                        game['Game'] == f"{home} vs {away}"):
+                        return render_template('watching.html', game=game)
+        
+        return "Game not found", 404
+    except Exception as e:
+        return f"An error occurred: {e}", 500
 
 @app.route('/api/get_probability')
 def get_probability():
-    sport = request.args.get("sport")
-    home_team = request.args.get("home")
-    away_team = request.args.get("away")
-
-    games_by_group = fetch_all_games_by_group()
-    game_data = None
-    for group, games in games_by_group.items():
-        for game in games["upcoming"] + games["today"]:
-            if game["Game"] == f"{home_team} vs {away_team}":
-                game_data = game
-                break
-        if game_data:
-            break
-
-    if game_data:
-        return jsonify({
-            "home_prob": game_data["HomeWinProb"],
-            "away_prob": game_data["AwayWinProb"]
-        })
-    else:
+    """API endpoint to fetch updated probability for a specific game."""
+    try:
+        sport = request.args.get('sport')
+        home = request.args.get('home')
+        away = request.args.get('away')
+        
+        games = fetch_all_games_by_group()
+        for group, group_games in games.items():
+            for section in ['today', 'upcoming']:
+                for game in group_games[section]:
+                    if (game['Sport'] == sport and 
+                        game['Game'] == f"{home} vs {away}"):
+                        return jsonify({
+                            'home_prob': game['HomeWinProb']
+                        })
+        
         return jsonify({"error": "Game not found"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/get_scores')
+def get_scores():
+    """API endpoint to fetch scores for all games."""
+    try:
+        games = fetch_all_games_by_group()
+        scores = []
+        
+        for group, group_games in games.items():
+            for section in ['today', 'upcoming']:
+                for game in group_games[section]:
+                    scores.append({
+                        'game': game['Game'],
+                        'home_team': game['Game'].split(' vs ')[0],
+                        'away_team': game['Game'].split(' vs ')[1],
+                        'home_score': game['HomeScore'],
+                        'away_score': game['AwayScore']
+                    })
+        
+        return jsonify(scores)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=False)  # Turn off debugging for production
+    app.run(debug=True)
