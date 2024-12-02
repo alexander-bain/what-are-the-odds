@@ -12,10 +12,28 @@
     </script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
     <title>Sports Odds</title>
+    <style>
+        .completed-badge {
+            background-color: #6c757d;
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            margin-left: 0.5rem;
+            font-size: 0.875rem;
+        }
+        .completed-row {
+            background-color: #f8f9fa !important;
+            opacity: 0.8;
+        }
+        .sports-icon {
+            font-size: 1.2em;
+            margin-right: 0.5rem;
+        }
+    </style>
 </head>
 <body>
 <div class="container my-4">
-    <h1 class="text-center mb-4">Sports Odds</h1>
+    <h1 class="text-center mb-4">What are the odds? 🎲</h1>
     
     {% if sorted_games %}
         <!-- Today's Games Section -->
@@ -40,7 +58,12 @@
                 {% endfor %}
                 
                 {% for sport, sport_games in groups.items() %}
-                    <h3 class="mt-4">{{ sport }}</h3>
+                    <h3 class="mt-4">
+                        {% if sport == 'NBA' or sport == 'NCAAB' %}🏀
+                        {% elif sport == 'NFL' or sport == 'NCAAF' %}🏈
+                        {% endif %}
+                        {{ sport }}
+                    </h3>
                     <table class="table table-striped mb-4">
                         <thead>
                             <tr>
@@ -48,25 +71,30 @@
                                 <th>Commence Time (Pacific)</th>
                                 <th>Home Win Probability (%)</th>
                                 <th>Away Win Probability (%)</th>
-                                <th>Live Score</th>
+                                <th>Score</th>
                                 <th>Action</th>
                             </tr>
                         </thead>
                         <tbody>
-                        {% for game in sport_games %}
-                            <tr>
-                                <td>{{ game.Game }}</td>
-                                <td>{{ game.CommenceTime }}</td>
-                                <td>{{ game.HomeWinProb }}</td>
-                                <td>{{ game.AwayWinProb }}</td>
-                                <td>{{ game.HomeScore }} - {{ game.AwayScore }}</td>
-                                <td>
-                                    <a href="/watching?sport={{ game.Sport }}&home={{ game.Game.split(' vs ')[0] }}&away={{ game.Game.split(' vs ')[1] }}" class="btn btn-primary">
-                                        Watch 📺
-                                    </a>
-                                </td>
-                            </tr>
-                        {% endfor %}
+                            {% for game in sport_games %}
+                                <tr class="{% if game.completed %}completed-row{% endif %}">
+                                    <td>{{ game.Game }}</td>
+                                    <td>{{ game.CommenceTime }}</td>
+                                    <td>{{ game.HomeWinProb }}</td>
+                                    <td>{{ game.AwayWinProb }}</td>
+                                    <td>
+                                        {{ game.HomeScore }} - {{ game.AwayScore }}
+                                        {% if game.completed %}
+                                            <span class="completed-badge">Final</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="/watching?id={{ game.id }}" class="btn btn-primary">
+                                            Watch 📺
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
                         </tbody>
                     </table>
                 {% endfor %}
@@ -108,14 +136,14 @@
                             </tr>
                         </thead>
                         <tbody>
-                        {% for game in sport_games %}
-                            <tr>
-                                <td>{{ game.Game }}</td>
-                                <td>{{ game.CommenceTime }}</td>
-                                <td>{{ game.HomeWinProb }}</td>
-                                <td>{{ game.AwayWinProb }}</td>
-                            </tr>
-                        {% endfor %}
+                            {% for game in sport_games %}
+                                <tr>
+                                    <td>{{ game.Game }}</td>
+                                    <td>{{ game.CommenceTime }}</td>
+                                    <td>{{ game.HomeWinProb }}</td>
+                                    <td>{{ game.AwayWinProb }}</td>
+                                </tr>
+                            {% endfor %}
                         </tbody>
                     </table>
                 {% endfor %}

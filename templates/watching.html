@@ -33,11 +33,69 @@ gtag('config', 'G-NWK1FEEP7N');
     margin: 0 10px;
     font-size: 18px;
 }
+.sportsbook-table {
+    margin: 20px auto;
+    width: 80%;
+    border-collapse: collapse;
+}
+.sportsbook-table th, .sportsbook-table td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: center;
+}
+.sportsbook-table th {
+    background-color: #f4f4f4;
+    font-weight: bold;
+}
+.completed-banner {
+    background-color: #6c757d;
+    color: white;
+    padding: 10px;
+    margin-bottom: 20px;
+    border-radius: 5px;
+    font-size: 24px;
+    font-weight: bold;
+}
+.completed .big-probability {
+    opacity: 0.6;
+}
+.completed .countdown {
+    display: none;
+}
 </style>
 </head>
 <body>
-<div class="container my-4 text-center">
+{% set sport_emoji = {
+    'NBA': '🏀',
+    'NCAAB': '🏀',
+    'NFL': '🏈',
+    'NCAAF': '🏈',
+    'MLB': '⚾',
+    'Golf': '⛳',
+    'Tennis': '🎾',
+    'Hockey': '🏒',
+    'Soccer': '⚽',
+    'UFC': '🥊',
+    'Boxing': '🥊',
+    'Formula1': '🏎️',
+    'NASCAR': '🏁',
+    'Rugby': '🏉',
+    'Cricket': '🏏',
+    'Volleyball': '🏐',
+    'Table Tennis': '🏓',
+    'Badminton': '🏸',
+    'MMA': '🥊',
+    'Wrestling': '🤼'
+}.get(game.Sport, '🎯') %}
+
+<div class="container my-4 text-center {% if game.completed %}completed{% endif %}">
     <h1>{{ game.Game }}</h1>
+    
+    {% if game.completed %}
+        <div class="completed-banner">
+            Final Score
+        </div>
+    {% endif %}
     
     <div class="score-display">
         {{ game.Game.split(' vs ')[0] }}: {{ game.HomeScore }}
@@ -49,38 +107,116 @@ gtag('config', 'G-NWK1FEEP7N');
         <h3>Show odds for:</h3>
         <label>
             <input type="radio" name="team" value="home" checked>
-            {{ game.Game.split(' vs ')[0] }}
+            {{ game.Game.split(' vs ')[0] }} {{ sport_emoji }}
         </label>
         <label>
             <input type="radio" name="team" value="away">
-            {{ game.Game.split(' vs ')[1] }}
+            {{ game.Game.split(' vs ')[1] }} {{ sport_emoji }}
         </label>
     </div>
 
     <div class="big-probability" id="current-prob">{{ game.HomeWinProb }}%</div>
-    <div class="countdown" id="countdown">Next update in: 30 seconds</div>
+    {% if not game.completed %}
+        <div class="countdown" id="countdown">Next update in: 30 seconds</div>
+    {% endif %}
     <canvas id="probabilityChart" width="400" height="200"></canvas>
+
+    <h3 class="mt-4">{% if game.completed %}Final {% endif %}Win Probabilities by Sportsbook</h3>
+    <table class="sportsbook-table">
+        <thead>
+            <tr>
+                <th>Sportsbook</th>
+                <th>{{ game.Game.split(' vs ')[0] }} (Home)</th>
+                <th>{{ game.Game.split(' vs ')[1] }} (Away)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for sportsbook, odds in game.SportsbookProbs.items() %}
+            <tr>
+                <td>{{ sportsbook }}</td>
+                <td>{{ odds.HomeWinProb }}%</td>
+                <td>{{ odds.AwayWinProb }}%</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 </div>
 <script>
 const ctx = document.getElementById('probabilityChart').getContext('2d');
-// Store both teams' probabilities
+const isGameCompleted = {{ game.completed | tojson }};
+
+// Initialize our data structures
 let historyData = {
     home: [{{ game.HomeWinProb }}],
-    away: [100 - {{ game.HomeWinProb }}]
+    away: [{{ game.AwayWinProb }}]
 };
+
+let sportsbookData = {
+    home: {{ game.SportsbookProbs | tojson | safe }},
+    away: {{ game.SportsbookProbs | tojson | safe }}
+};
+
+let sportsbookHistory = {};
+
+// Initialize sportsbook history with initial values
+Object.entries(sportsbookData.home).forEach(([book, odds]) => {
+    sportsbookHistory[book] = {
+        home: [odds.HomeWinProb],
+        away: [odds.AwayWinProb]
+    };
+});
+
 let chartData = {
     labels: [new Date().toLocaleTimeString()],
     datasets: [{
-        label: 'Win Probability (%)',
+        label: 'Win Probability',
         data: [{{ game.HomeWinProb }}],
         borderColor: 'blue',
-        fill: false
+        borderWidth: 3,
+        fill: false,
+        tension: 0.1
     }]
 };
+
+function prepareChartData(isHome) {
+    const datasets = [{
+        label: 'Win Probability',
+        data: isHome ? historyData.home : historyData.away,
+        borderColor: 'blue',
+        borderWidth: 3,
+        fill: false,
+        tension: 0.1
+    }];
+
+    // Add sportsbook lines with their history
+    Object.entries(sportsbookData.home).forEach(([book, odds]) => {
+        datasets.push({
+            label: book,
+            data: isHome ? sportsbookHistory[book].home : sportsbookHistory[book].away,
+            borderColor: 'rgba(128, 128, 128, 0.5)',
+            borderWidth: 1,
+            borderDash: [5, 5],
+            fill: false,
+            pointRadius: 0
+        });
+    });
+
+    return datasets;
+}
+
+// Initialize chart with all datasets
+chartData.datasets = prepareChartData(true);
+
 const probabilityChart = new Chart(ctx, {
     type: 'line',
     data: chartData,
     options: {
+        animation: {
+            duration: 0
+        },
+        plugins: {
+            legend: { display: false }
+        },
         scales: {
             y: {
                 min: 0,
@@ -90,60 +226,126 @@ const probabilityChart = new Chart(ctx, {
     }
 });
 
-let countdown = 30;
-const countdownElement = document.getElementById('countdown');
-const updateCountdown = () => {
-    countdown -= 1;
-    countdownElement.textContent = `Next update in: ${countdown} seconds`;
-    if (countdown === 0) {
-        countdown = 30;
-        updateChart();
-        fetchLiveScore();
-    }
-};
-setInterval(updateCountdown, 1000);
+// Only set up updates if game is not completed
+if (!isGameCompleted) {
+    let countdown = 30;
+    const countdownElement = document.getElementById('countdown');
+
+    const updateCountdown = () => {
+        countdown -= 1;
+        countdownElement.textContent = `Next update in: ${countdown} seconds`;
+        if (countdown === 0) {
+            countdown = 30;
+            updateChart();
+            fetchLiveScore();
+        }
+    };
+
+    setInterval(updateCountdown, 1000);
+}
 
 async function updateChart() {
-    const response = await fetch(`/api/get_probability?sport={{ game.Sport }}&home={{ game.Game.split(' vs ')[0] }}&away={{ game.Game.split(' vs ')[1] }}`);
-    const data = await response.json();
-    const now = new Date().toLocaleTimeString();
+    if (isGameCompleted) return;
     
-    // Store both probabilities
-    historyData.home.push(data.home_prob);
-    historyData.away.push(100 - data.home_prob);
-    
-    const selectedTeam = document.querySelector('input[name="team"]:checked').value;
-    const currentProb = selectedTeam === 'home' ? data.home_prob : (100 - data.home_prob);
-    
-    document.getElementById('current-prob').textContent = `${currentProb}%`;
-    chartData.labels.push(now);
-    chartData.datasets[0].data = selectedTeam === 'home' ? historyData.home : historyData.away;
-    probabilityChart.update();
+    try {
+        const response = await fetch(`/api/get_probability?id={{ game.id }}`);
+        const data = await response.json();
+        
+        if (!data || typeof data.home_prob !== 'number' || typeof data.away_prob !== 'number') {
+            console.error('Invalid probability data:', data);
+            return;
+        }
+        
+        const now = new Date().toLocaleTimeString();
+        
+        // Update histories
+        historyData.home.push(Number(data.home_prob));
+        historyData.away.push(Number(data.away_prob));
+
+        // Update sportsbook histories
+        if (data.sportsbooks) {
+            sportsbookData = {
+                home: data.sportsbooks,
+                away: data.sportsbooks
+            };
+            
+            // Update history for each sportsbook
+            Object.entries(data.sportsbooks).forEach(([book, odds]) => {
+                if (!sportsbookHistory[book]) {
+                    sportsbookHistory[book] = {
+                        home: [],
+                        away: []
+                    };
+                }
+                sportsbookHistory[book].home.push(Number(odds.HomeWinProb));
+                sportsbookHistory[book].away.push(Number(odds.AwayWinProb));
+            });
+        }
+        
+        const selectedTeam = document.querySelector('input[name="team"]:checked').value;
+        const isHome = selectedTeam === 'home';
+        
+        // Update display probability
+        const displayProb = isHome ? data.home_prob : data.away_prob;
+        if (typeof displayProb === 'number') {
+            document.getElementById('current-prob').textContent = `${displayProb}%`;
+        }
+        
+        // Update chart
+        chartData.labels.push(now);
+        chartData.datasets = prepareChartData(isHome);
+        probabilityChart.update();
+
+        // Update sportsbook table
+        updateSportsbookTable(sportsbookData.home);
+    } catch (error) {
+        console.error("Error updating chart:", error);
+    }
 }
 
 async function fetchLiveScore() {
-    const response = await fetch('/api/get_scores');
-    const scores = await response.json();
-    const score = scores.find(s => s.game === "{{ game.Game }}");
-    if (score) {
-        const scoreDisplay = document.createElement('h2');
-        scoreDisplay.textContent = `${score.home_team}: ${score.home_score} - ${score.away_team}: ${score.away_score}`;
-        const oldScore = document.querySelector('h2');
-        if (oldScore) {
-            oldScore.replaceWith(scoreDisplay);
+    if (isGameCompleted) return;
+    
+    try {
+        const response = await fetch('/api/get_scores');
+        const scores = await response.json();
+        const score = scores.find(s => s.game === "{{ game.Game }}");
+        if (score) {
+            document.querySelector('.score-display').textContent = 
+                `${score.home_team}: ${score.home_score} - ${score.away_team}: ${score.away_score}`;
         }
+    } catch (error) {
+        console.error("Error fetching scores:", error);
     }
+}
+
+function updateSportsbookTable(sportsbooks) {
+    const tbody = document.querySelector('.sportsbook-table tbody');
+    tbody.innerHTML = '';
+    
+    Object.entries(sportsbooks).forEach(([book, odds]) => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${book}</td>
+            <td>${odds.HomeWinProb}%</td>
+            <td>${odds.AwayWinProb}%</td>
+        `;
+        tbody.appendChild(row);
+    });
 }
 
 // Add event listeners for radio buttons
 document.querySelectorAll('input[name="team"]').forEach(radio => {
     radio.addEventListener('change', function() {
         const isHome = this.value === 'home';
-        // Use the stored history to update the graph
-        chartData.datasets[0].data = isHome ? historyData.home : historyData.away;
-        document.getElementById('current-prob').textContent = 
-            `${chartData.datasets[0].data[chartData.datasets[0].data.length - 1]}%`;
-        probabilityChart.update();
+        const currentProbs = isHome ? historyData.home : historyData.away;
+        const lastProb = currentProbs[currentProbs.length - 1];
+        
+        if (typeof lastProb === 'number') {
+            document.getElementById('current-prob').textContent = `${lastProb}%`;
+            chartData.datasets = prepareChartData(isHome);
+            probabilityChart.update();
+        }
     });
 });
 </script>

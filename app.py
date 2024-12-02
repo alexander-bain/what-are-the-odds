@@ -1,5 +1,5 @@
 from flask import Flask, jsonify, render_template, request
-from fetch_odds import fetch_all_games_by_group
+from fetch_odds import fetch_all_games_by_group, cached_games  # Add cached_games to import
 
 app = Flask(__name__)
 
@@ -16,9 +16,7 @@ def index():
 def watching():
     """Renders the watching page for a specific game."""
     try:
-        sport = request.args.get('sport')
-        home = request.args.get('home')
-        away = request.args.get('away')
+        game_id = request.args.get('id')
         
         games = fetch_all_games_by_group()
         
@@ -26,8 +24,7 @@ def watching():
         for group, group_games in games.items():
             for section in ['today', 'upcoming']:
                 for game in group_games[section]:
-                    if (game['Sport'] == sport and 
-                        game['Game'] == f"{home} vs {away}"):
+                    if game['id'] == game_id:
                         return render_template('watching.html', game=game)
         
         return "Game not found", 404
@@ -38,18 +35,20 @@ def watching():
 def get_probability():
     """API endpoint to fetch updated probability for a specific game."""
     try:
-        sport = request.args.get('sport')
-        home = request.args.get('home')
-        away = request.args.get('away')
-        
+        game_id = request.args.get('id')
+
+        # Refresh cached data
         games = fetch_all_games_by_group()
+        
+        # Find the specific game
         for group, group_games in games.items():
             for section in ['today', 'upcoming']:
                 for game in group_games[section]:
-                    if (game['Sport'] == sport and 
-                        game['Game'] == f"{home} vs {away}"):
+                    if game['id'] == game_id:
                         return jsonify({
-                            'home_prob': game['HomeWinProb']
+                            'home_prob': game['HomeWinProb'],
+                            'away_prob': game['AwayWinProb'],
+                            'sportsbooks': game['SportsbookProbs']
                         })
         
         return jsonify({"error": "Game not found"}), 404
