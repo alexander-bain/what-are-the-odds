@@ -29,7 +29,7 @@ def fetch_all_games_by_group():
 
 def fetch_games_and_scores(sport_key, group_name, games_by_group, pacific_tz, now):
     """Fetches games and live scores for a specific sport."""
-    odds_url = f"{BASE_URL}/{sport_key}/odds/?apiKey={API_KEY}&regions=us&markets=h2h"
+    odds_url = f"{BASE_URL}/{sport_key}/odds/?apiKey={API_KEY}&regions=us&markets=h2h,spreads,totals"
     scores_url = f"{BASE_URL}/{sport_key}/scores/?apiKey={API_KEY}"
 
     try:
@@ -62,6 +62,14 @@ def fetch_games_and_scores(sport_key, group_name, games_by_group, pacific_tz, no
     except requests.exceptions.RequestException as e:
         print(f"DEBUG: Error fetching odds and scores for {sport_key}: {e}")
 
+def calculate_implied_scores(total, spread):
+    """Calculate implied scores based on the total and spread."""
+    if total is None or spread is None:
+        return None, None
+    
+    favored_team_score = (total + abs(spread)) / 2
+    underdog_team_score = (total - abs(spread)) / 2
+    return round(favored_team_score, 1), round(underdog_team_score, 1)
 
 def create_scores_lookup(scores_data):
     """Creates a lookup dictionary for game scores."""
@@ -104,8 +112,13 @@ def process_game_data(game, scores_lookup, group_name, pacific_tz):
     away_score = game_scores.get('away_score', "N/A")
     completed = game_scores.get('completed', False)
 
-    # Compute probabilities
+    # Get market data
     sportsbook_probs, avg_home_prob, avg_away_prob = compute_probabilities(game, home_team, away_team)
+    total, spread, sportsbook_implied_scores = get_total_and_spread(game, home_team)
+
+    # Calculate implied scores
+    implied_home_score, implied_away_score = calculate_implied_scores(total, spread)
+    is_home_favored = spread is not None and spread < 0
 
     return {
         "id": game_id,
@@ -117,9 +130,62 @@ def process_game_data(game, scores_lookup, group_name, pacific_tz):
         "HomeScore": home_score,
         "AwayScore": away_score,
         "completed": completed,
-        "SportsbookProbs": sportsbook_probs  # Fixed variable name
+        "SportsbookProbs": sportsbook_probs,
+        "Total": total,
+        "Spread": spread,
+        "ImpliedHomeScore": implied_home_score,
+        "ImpliedAwayScore": implied_away_score,
+        "IsHomeFavored": is_home_favored,
+        "SportsbookImpliedScores": sportsbook_implied_scores
     }
 
+def get_total_and_spread(game, home_team):
+    """Extract and aggregate totals and spreads from all bookmakers."""
+    bookmakers = game.get("bookmakers", [])
+    if not bookmakers:
+        return None, None, {}
+
+    totals = []
+    spreads = []
+    sportsbook_implied_scores = {}
+
+    for bookmaker in bookmakers:
+        book_name = bookmaker.get("title", "Unknown")
+        book_total = None
+        book_spread = None
+
+        for market in bookmaker.get("markets", []):
+            if market["key"] == "totals":
+                for outcome in market.get("outcomes", []):
+                    if outcome["name"] == "Over":
+                        book_total = float(outcome["point"])
+                        break
+            
+            elif market["key"] == "spreads":
+                for outcome in market.get("outcomes", []):
+                    if outcome["name"] == home_team:
+                        book_spread = float(outcome["point"])
+                        break
+
+        if book_total is not None and book_spread is not None:
+            totals.append(book_total)
+            spreads.append(book_spread)
+            home_score, away_score = calculate_implied_scores(book_total, book_spread)
+            if home_score is not None and away_score is not None:
+                sportsbook_implied_scores[book_name] = {
+                    "HomeScore": home_score,
+                    "AwayScore": away_score,
+                    "Total": book_total,
+                    "Spread": book_spread
+                }
+
+    if not totals or not spreads:
+        return None, None, {}
+
+    avg_total = sum(totals) / len(totals)
+    avg_spread = sum(spreads) / len(spreads)
+    
+    return round(avg_total, 1), round(avg_spread, 1), sportsbook_implied_scores
 
 def compute_probabilities(game, home_team, away_team):
     """Computes win probabilities from sportsbook data."""

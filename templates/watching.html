@@ -90,166 +90,244 @@ gtag('config', 'G-NWK1FEEP7N');
 
 <div class="container my-4 text-center {% if game.completed %}completed{% endif %}">
     <h1>{{ game.Game }}</h1>
-    
+
     {% if game.completed %}
-        <div class="completed-banner">
-            Final Score
-        </div>
-    {% endif %}
-    
-    <div class="score-display">
-        {{ game.Game.split(' vs ')[0] }}: {{ game.HomeScore }}
-        -
-        {{ game.Game.split(' vs ')[1] }}: {{ game.AwayScore }}
+    <div class="completed-banner">
+        Final Score
     </div>
+    {% endif %}
+
+    {% if game.HomeScore != "N/A" and game.AwayScore != "N/A" %}
+    <div class="score-display mb-4">
+        {{ game.Game.split(' vs ')[0] }}: {{ game.HomeScore }} - {{ game.Game.split(' vs ')[1] }}: {{ game.AwayScore }}
+    </div>
+    {% endif %}
+
+    {% if not game.completed and game.Total is not none and game.Spread is not none %}
+    <div class="implied-scores mb-4">
+        <h3>Implied Final Score</h3>
+        <div class="score-prediction">
+            {% if game.IsHomeFavored %}
+            <strong>{{ game.Game.split(' vs ')[0] }}</strong>: {{ game.ImpliedHomeScore }} - 
+            {{ game.Game.split(' vs ')[1] }}: {{ game.ImpliedAwayScore }}
+            {% else %}
+            {{ game.Game.split(' vs ')[0] }}: {{ game.ImpliedHomeScore }} - 
+            <strong>{{ game.Game.split(' vs ')[1] }}</strong>: {{ game.ImpliedAwayScore }}
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
 
     <div class="team-selector">
         <h3>Show odds for:</h3>
-        <label>
-            <input type="radio" name="team" value="home" checked>
+        <div>
+            <input type="radio" name="team" value="home" checked> 
             {{ game.Game.split(' vs ')[0] }} {{ sport_emoji }}
-        </label>
-        <label>
-            <input type="radio" name="team" value="away">
+            <input type="radio" name="team" value="away"> 
             {{ game.Game.split(' vs ')[1] }} {{ sport_emoji }}
-        </label>
+        </div>
     </div>
 
-    <div class="big-probability" id="current-prob">{{ game.HomeWinProb }}%</div>
+    <div id="current-prob" class="big-probability">
+        {{ game.HomeWinProb }}%
+    </div>
+
     {% if not game.completed %}
-        <div class="countdown" id="countdown">Next update in: 30 seconds</div>
+    <div id="countdown" class="countdown">
+        Next update in: 30 seconds
+    </div>
     {% endif %}
-    <canvas id="probabilityChart" width="400" height="200"></canvas>
 
-    <h3 class="mt-4">{% if game.completed %}Final {% endif %}Win Probabilities by Sportsbook</h3>
-    <table class="sportsbook-table">
-        <thead>
-            <tr>
-                <th>Sportsbook</th>
-                <th>{{ game.Game.split(' vs ')[0] }} (Home)</th>
-                <th>{{ game.Game.split(' vs ')[1] }} (Away)</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for sportsbook, odds in game.SportsbookProbs.items() %}
-            <tr>
-                <td>{{ sportsbook }}</td>
-                <td>{{ odds.HomeWinProb }}%</td>
-                <td>{{ odds.AwayWinProb }}%</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
-<script>
-const ctx = document.getElementById('probabilityChart').getContext('2d');
-const isGameCompleted = {{ game.completed | tojson }};
-
-// Initialize our data structures
-let historyData = {
-    home: [{{ game.HomeWinProb }}],
-    away: [{{ game.AwayWinProb }}]
-};
-
-let sportsbookData = {
-    home: {{ game.SportsbookProbs | tojson | safe }},
-    away: {{ game.SportsbookProbs | tojson | safe }}
-};
-
-let sportsbookHistory = {};
-
-// Initialize sportsbook history with initial values
-Object.entries(sportsbookData.home).forEach(([book, odds]) => {
-    sportsbookHistory[book] = {
-        home: [odds.HomeWinProb],
-        away: [odds.AwayWinProb]
-    };
-});
-
-let chartData = {
-    labels: [new Date().toLocaleTimeString()],
-    datasets: [{
-        label: 'Win Probability',
-        data: [{{ game.HomeWinProb }}],
-        borderColor: 'blue',
-        borderWidth: 3,
-        fill: false,
-        tension: 0.1
-    }]
-};
-
-function prepareChartData(isHome) {
-    const datasets = [{
-        label: 'Win Probability',
-        data: isHome ? historyData.home : historyData.away,
-        borderColor: 'blue',
-        borderWidth: 3,
-        fill: false,
-        tension: 0.1
-    }];
-
-    // Add sportsbook lines with their history
-    Object.entries(sportsbookData.home).forEach(([book, odds]) => {
-        datasets.push({
-            label: book,
-            data: isHome ? sportsbookHistory[book].home : sportsbookHistory[book].away,
-            borderColor: 'rgba(128, 128, 128, 0.5)',
-            borderWidth: 1,
-            borderDash: [5, 5],
-            fill: false,
-            pointRadius: 0
-        });
-    });
-
-    return datasets;
-}
-
-// Initialize chart with all datasets
-chartData.datasets = prepareChartData(true);
-
-const probabilityChart = new Chart(ctx, {
-    type: 'line',
-    data: chartData,
-    options: {
-        animation: {
-            duration: 0
-        },
-        plugins: {
-            legend: { display: false }
-        },
-        scales: {
-            y: {
-                min: 0,
-                max: 100
+    <div class="chart-container" style="position: relative; width: 100%; padding-bottom: 50%; margin: 20px 0;">
+        <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0;">
+            <canvas id="probabilityChart" style="width: 100%; height: 100%;"></canvas>
+        </div>
+    </div>
+    <style>
+        @media (max-width: 768px) {
+            .chart-container {
+                padding-bottom: 75%; /* Taller on mobile */
             }
         }
-    }
-});
-
-// Only set up updates if game is not completed
-if (!isGameCompleted) {
-    let countdown = 30;
-    const countdownElement = document.getElementById('countdown');
-
-    const updateCountdown = () => {
-        countdown -= 1;
-        countdownElement.textContent = `Next update in: ${countdown} seconds`;
-        if (countdown === 0) {
-            countdown = 30;
-            updateChart();
-            fetchLiveScore();
+        @media (min-width: 1200px) {
+            .chart-container {
+                padding-bottom: 40%; /* Not as tall on large screens */
+            }
         }
-    };
+    </style>
+    
 
-    setInterval(updateCountdown, 1000);
+    <div class="bg-white shadow-sm p-4 mt-4">
+        <h3 class="mb-4">{% if game.completed %}Final {% endif %}Sportsbook Details</h3>
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr class="table-light">
+                        <th style="width: 20%">Sportsbook</th>
+                        <th style="width: 20%">{{ game.Game.split(' vs ')[0] }} (Home)</th>
+                        <th style="width: 20%">{{ game.Game.split(' vs ')[1] }} (Away)</th>
+                        {% if not game.completed %}
+                        <th style="width: 40%">Implied Final Score</th>
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for sportsbook, odds in game.SportsbookProbs.items() %}
+                    <tr>
+                        <td><strong>{{ sportsbook }}</strong></td>
+                        <td>{{ odds.HomeWinProb }}%</td>
+                        <td>{{ odds.AwayWinProb }}%</td>
+                        {% if not game.completed and sportsbook in game.SportsbookImpliedScores %}
+                        <td>
+                            {% if game.SportsbookImpliedScores[sportsbook].HomeScore > game.SportsbookImpliedScores[sportsbook].AwayScore %}
+                            <strong>{{ game.SportsbookImpliedScores[sportsbook].HomeScore }}</strong> - {{ game.SportsbookImpliedScores[sportsbook].AwayScore }}
+                            {% else %}
+                            {{ game.SportsbookImpliedScores[sportsbook].HomeScore }} - <strong>{{ game.SportsbookImpliedScores[sportsbook].AwayScore }}</strong>
+                            {% endif %}
+                        </td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<style>
+.table {
+    border: 1px solid #dee2e6;
 }
+.table th, .table td {
+    border: 1px solid #dee2e6;
+    padding: 0.75rem;
+    vertical-align: middle;
+}
+.table thead th {
+    border-bottom: 2px solid #dee2e6;
+    background-color: #f8f9fa;
+}
+.table tbody tr:nth-of-type(odd) {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+.table tbody tr:hover {
+    background-color: rgba(0, 0, 0, 0.075);
+}
+</style>
 
-async function updateChart() {
+<script>
+    const ctx = document.getElementById('probabilityChart').getContext('2d');
+    const isGameCompleted = {{ game.completed | tojson }};
+    
+    // Initialize our data structures
+    let historyData = {
+        home: [{{ game.HomeWinProb }}],
+        away: [{{ game.AwayWinProb }}]
+    };
+    
+    let sportsbookData = {
+        home: {{ game.SportsbookProbs | tojson | safe }},
+        away: {{ game.SportsbookProbs | tojson | safe }}
+    };
+    
+    let sportsbookHistory = {};
+    
+    // Initialize sportsbook history with initial values
+    Object.entries(sportsbookData.home).forEach(([book, odds]) => {
+        sportsbookHistory[book] = {
+            home: [odds.HomeWinProb],
+            away: [odds.AwayWinProb]
+        };
+    });
+    
+    let chartData = {
+        labels: [new Date().toLocaleTimeString()],
+        datasets: [{
+            label: 'Win Probability',
+            data: [{{ game.HomeWinProb }}],
+            borderColor: 'blue',
+            borderWidth: 3,
+            fill: false,
+            tension: 0.1
+        }]
+    };
+    
+    function prepareChartData(isHome) {
+        const datasets = [{
+            label: 'Win Probability',
+            data: isHome ? historyData.home : historyData.away,
+            borderColor: 'blue',
+            borderWidth: 3,
+            fill: false,
+            tension: 0.1
+        }];
+    
+        // Add sportsbook lines with their history
+        Object.entries(sportsbookData.home).forEach(([book, odds]) => {
+            datasets.push({
+                label: book,
+                data: isHome ? sportsbookHistory[book].home : sportsbookHistory[book].away,
+                borderColor: 'rgba(128, 128, 128, 0.5)',
+                borderWidth: 1,
+                borderDash: [5, 5],
+                fill: false,
+                pointRadius: 0
+            });
+        });
+    
+        return datasets;
+    }
+    
+    // Initialize chart with all datasets
+    chartData.datasets = prepareChartData(true);
+    
+    const probabilityChart = new Chart(ctx, {
+        type: 'line',
+        data: chartData,
+        options: {
+            animation: {
+                duration: 0
+            },
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: {
+                    min: 0,
+                    max: 100
+                }
+            }
+        }
+    });
+    
+    // Only set up updates if game is not completed
+    if (!isGameCompleted) {
+        let countdown = 30;
+        const countdownElement = document.getElementById('countdown');
+    
+        const updateCountdown = () => {
+            countdown -= 1;
+            countdownElement.textContent = `Next update in: ${countdown} seconds`;
+            if (countdown === 0) {
+                countdown = 30;
+                updateChart();
+                fetchLiveScore();
+            }
+        };
+    
+        setInterval(updateCountdown, 1000);
+    }
+    
+    async function updateChart() {
     if (isGameCompleted) return;
     
     try {
+        console.log("Before fetch - Current sportsbookData:", sportsbookData);
+        
         const response = await fetch(`/api/get_probability?id={{ game.id }}`);
         const data = await response.json();
+        
+        console.log("API Response:", data);
         
         if (!data || typeof data.home_prob !== 'number' || typeof data.away_prob !== 'number') {
             console.error('Invalid probability data:', data);
@@ -257,19 +335,21 @@ async function updateChart() {
         }
         
         const now = new Date().toLocaleTimeString();
-        
-        // Update histories
+            
+            // Update histories
         historyData.home.push(Number(data.home_prob));
         historyData.away.push(Number(data.away_prob));
 
-        // Update sportsbook histories
+        // Update sportsbook histories and data
         if (data.sportsbooks) {
             sportsbookData = {
                 home: data.sportsbooks,
-                away: data.sportsbooks
+                away: data.sportsbooks,
+                impliedScores: data.SportsbookImpliedScores || sportsbookData.impliedScores || {}
             };
             
-            // Update history for each sportsbook
+            console.log("After update - New sportsbookData:", sportsbookData);
+            
             Object.entries(data.sportsbooks).forEach(([book, odds]) => {
                 if (!sportsbookHistory[book]) {
                     sportsbookHistory[book] = {
@@ -320,32 +400,61 @@ async function fetchLiveScore() {
 }
 
 function updateSportsbookTable(sportsbooks) {
-    const tbody = document.querySelector('.sportsbook-table tbody');
+    const tbody = document.querySelector('tbody');
+    if (!tbody) return;
+    
+    console.log("Updating table with sportsbooks:", sportsbooks);
+    console.log("Current sportsbookData:", sportsbookData);
+    
     tbody.innerHTML = '';
     
     Object.entries(sportsbooks).forEach(([book, odds]) => {
         const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${book}</td>
+        const isHomeFavored = parseFloat(odds.HomeWinProb) > parseFloat(odds.AwayWinProb);
+        
+        let innerHTML = `
+            <td><strong>${book}</strong></td>
             <td>${odds.HomeWinProb}%</td>
             <td>${odds.AwayWinProb}%</td>
         `;
+        
+        if (!isGameCompleted && sportsbookData.impliedScores && sportsbookData.impliedScores[book]) {
+            console.log(`Found implied scores for ${book}:`, sportsbookData.impliedScores[book]);
+            const scores = sportsbookData.impliedScores[book];
+            innerHTML += `<td>
+                ${isHomeFavored ? 
+                    `<strong>${scores.HomeScore}</strong> - ${scores.AwayScore}` :
+                    `${scores.HomeScore} - <strong>${scores.AwayScore}</strong>`}
+            </td>`;
+        } else {
+            console.log(`No implied scores for ${book}`);
+            innerHTML += '<td>-</td>';
+        }
+        
+        row.innerHTML = innerHTML;
         tbody.appendChild(row);
     });
 }
 
 // Add event listeners for radio buttons
 document.querySelectorAll('input[name="team"]').forEach(radio => {
-    radio.addEventListener('change', function() {
+    radio.addEventListener('change', function () {
         const isHome = this.value === 'home';
         const currentProbs = isHome ? historyData.home : historyData.away;
         const lastProb = currentProbs[currentProbs.length - 1];
         
+        // Update the displayed probability and chart
         if (typeof lastProb === 'number') {
             document.getElementById('current-prob').textContent = `${lastProb}%`;
             chartData.datasets = prepareChartData(isHome);
             probabilityChart.update();
         }
+
+        // Send a Google Analytics event for team selection
+        gtag('event', 'team_selected', {
+            'event_category': 'Interaction',
+            'event_label': isHome ? '{{ game.Game.split(" vs ")[0] }}' : '{{ game.Game.split(" vs ")[1] }}'
+        });
     });
 });
 </script>

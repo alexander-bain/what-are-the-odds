@@ -48,7 +48,13 @@ def get_probability():
                         return jsonify({
                             'home_prob': game['HomeWinProb'],
                             'away_prob': game['AwayWinProb'],
-                            'sportsbooks': game['SportsbookProbs']
+                            'sportsbooks': game['SportsbookProbs'],
+                            'SportsbookImpliedScores': game['SportsbookImpliedScores'],  # Add this
+                            'implied_home_score': game['ImpliedHomeScore'],
+                            'implied_away_score': game['ImpliedAwayScore'],
+                            'is_home_favored': game['IsHomeFavored'],
+                            'total': game['Total'],
+                            'spread': game['Spread']
                         })
         
         return jsonify({"error": "Game not found"}), 404
